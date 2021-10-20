@@ -394,6 +394,7 @@ def train(run_num):
     best_ccc = 0
     best_output = None
     global_iter = 0
+    best_epoch = 0
     # a1 = 0.0
     for epoch in range(n_epoch):
         # print("att_12: {}".format(model.att_12.weight.sum()))
@@ -446,15 +447,14 @@ def train(run_num):
         if ccc_to_compare > best_ccc:
             best_output = save_model(model, epoch, best=True, run=run_num)
             best_ccc = ccc_to_compare
+            best_epoch = epoch
         print("{:10}. Epoch {:3}. Total loss: {:7.4f}. LR: {:7.6f}. "
               "ccc_train: {:4.3f}. ccc_dev: {:4.3f}. ccc_test: {:4.3f}".format(time_since(start), epoch, total_loss, scheduler.get_lr()[0],
                                                                                ccc_train, ccc_dev, ccc_test))
-        if epoch+1 % model_save_freq == 0:
-            _ = save_model(model, epoch, run=run_num)
     # save the last model
     last_output = save_model(model, n_epoch-1, run=run_num)
     log_writer.close()
-    return last_output, best_output
+    return last_output, best_output, best_epoch
 
 
 def load_model(model_path):
@@ -472,7 +472,7 @@ def save_model(model, epoch, best=False, run=None):
         model_output = os.path.join(model_odir, '')
 
     if best:
-        model_output = "{}best_{}.pt".format(model_output, epoch)
+        model_output = "{}best.pt".format(model_output)
     else:
         model_output = "{}epoch_{}.pt".format(model_output, epoch)
     torch.save(model.state_dict(), model_output)
@@ -824,8 +824,9 @@ global_start = time.time()
 Arguments
 '''
 ap = argparse.ArgumentParser()
-ap.add_argument("-m", "--mode", help="{train, test}", choices=['train', 'test', 'count_paras'], default='test')
-ap.add_argument("--name", help="model name", default='')
+ap.add_argument("-m", "--mode", help="{train, test}", choices=['train', 'test'], default='test')
+ap.add_argument("--model", help="path to the model")
+ap.add_argument("--output", help="path to the output dir")
 ap.add_argument("--gpu", help="gpu", default=0, choices=[0, 1, 2, 3], type=int)
 ap.add_argument('--value', help="actual: predict actual value; diff: predict differences", choices=['actual', 'diff'], default='actual')
 ap.add_argument("--bi", help="{no: LSTM; yes: BiLSTM}", default='yes', choices=["no", "yes"])
@@ -850,7 +851,6 @@ ap.add_argument("--attention", help="whether to use attention (If no, the last h
 ap.add_argument("--emb_dim", help="Word embedding dim", default=768, type=int)
 ap.add_argument("--has_pre_suf", help="whether to trim prefix and suffix. No for GPT2", default='yes', choices=['yes', 'no'])
 ap.add_argument('--ratings', required=True, help='path to ratings dir', default='data/ratings/')
-ap.add_argument("--logdir", help="folder created when training the model (to use in test)")
 
 args = ap.parse_args()
 
@@ -860,7 +860,8 @@ Parameters
 train_mode = False
 if args.mode == 'train':
     train_mode = True
-print("Mode: {}".format("Train" if train_mode else "Test"))
+print("Mode: ", args.mode)
+
 sgd = False
 lr = args.lr
 lr_step = 50
@@ -928,19 +929,16 @@ max_num_sentences = 37
 Directories
 '''
 prog_id = time.strftime("%Y%m%d_%H%M%S", time.localtime(global_start))  # program id
-if args.mode == 'test':
-    log_dir = args.logdir
-else:
+if args.mode == 'train':
     if args.suffix != '':
         prog_id += "_{}".format(args.suffix)
     log_dir = "data/log/{}/".format(prog_id)
-print("log_dir: {}".format(log_dir))
-
-
-model_odir = os.path.join(log_dir, "models/")
+    print("log_dir: {}".format(log_dir))
+    model_odir = os.path.join(log_dir, "models/")
+else:
+    log_dir = args.output
 scoring_dir = os.path.join(log_dir, 'scores')
 output_root = os.path.join(log_dir, 'test_results/')
-
 score_writer = None
 
 '''
@@ -954,15 +952,8 @@ if torch.cuda.is_available():
 '''
 Data loading
 '''
-# print("Loading embeddings...")
-# we_file = args.embeddings
-# embeddings = KeyedVectors.load_word2vec_format(we_file)
-
 print("Loading data")
 start = time.time()
-# data_dir = "data/data_sorted_events/"
-# data_dir = "data/data_sorted_events_orgSents/"
-# data_dir = 'data/data_sentences_time_diff_0.1/'
 data_dir = args.data
 
 print("Load data")
@@ -982,7 +973,7 @@ testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, coll
 
 # load groundtruth
 gt_dir = args.ratings  # "data/ratings
-rating_fname='observer_EWE'
+rating_fname = 'observer_EWE'
 train_gt = load_groundtruth(os.path.join(gt_dir, 'train', rating_fname))
 dev_gt = load_groundtruth(os.path.join(gt_dir, 'valid', rating_fname))
 test_gt = load_groundtruth(os.path.join(gt_dir, 'test', rating_fname))
@@ -991,16 +982,8 @@ ccc_trains = []
 ccc_devs = []
 ccc_tests = []
 setting_file = os.path.join(log_dir, "setting.txt")
-if args.mode == 'count_paras':
-    # count # of parameters
-    model = init_model()
-    total_params = sum(p.numel() for p in model.parameters())
-    total_params_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print("#params: {}".format(total_params))
-    print("#trainable_params: {}".format(total_params_trainable))
-    sys.exit(0)
+
 if train_mode:
-    mkdir(log_dir)
     mkdir(model_odir)
     mkdir(scoring_dir)
     score_writer = open(os.path.join(log_dir, "train_scores.txt"), 'w')
@@ -1017,17 +1000,15 @@ if train_mode:
     runs_writer.write("@Run\tBestEpoch\tTrain(Best)\tDev\tTest\n")
     for run in range(num_runs):
         print("=================================")
-        print("= Run #{}".format(run))
+        print("| Run #{}".format(run))
         print("=================================")
         score_writer.write("\n\n--------------------\nRUN {}\n\n".format(run))
         score_writer.write("Epoch\tccc_train\tccc_dev\tccc_test\t\tEpoch\trho_train\trho_dev\trho_test\n")
-        last_output, best_output = train(run)
+        last_output, best_output, best_epoch = train(run)
         ccc_train, ccc_dev, ccc_test = run_test(best_output, return_scores=True)
         ccc_trains.append(ccc_train)
         ccc_devs.append(ccc_dev)
         ccc_tests.append(ccc_test)
-
-        best_epoch = get_epoch_number(os.path.basename(best_output))
         best_epoches.append(best_epoch)
         print("Best ({})".format(best_output))
         print("ccc_train: {:.4f}\tccc_dev: {:.4f}\tccc_test: {:.4f}".format(ccc_train, ccc_dev, ccc_test))
@@ -1045,9 +1026,13 @@ if train_mode:
     print("Average best epoch: {:.0f}".format(np.mean(best_epoches)))
     print("Total time: {}".format(time_since(global_start)))
 else:
-    output_root = os.path.join(output_root, args.name)
-    mkdir(output_root)
+    # output_root = os.path.join(output_root, args.name)
+    model_path = args.model
+    if not os.path.isfile(model_path):
+        print("Model not found ", model_path)
+        sys.exit(0)
 
+    mkdir(output_root)
     att_output_dir = os.path.join(output_root, "attention_output/")
     seq_odir = os.path.join(output_root, "pred_seqs/")
     train_output_dir = os.path.join(seq_odir, "train/")
@@ -1062,13 +1047,7 @@ else:
     mkdir(test_output_dir)
     mkdir(scoring_dir)
 
-    model_path = os.path.join(model_odir, args.name)
-    # model_path = "data/log/{}/best_models/{}".format(args.id, args.name)
-    # scoring_dir = 'data/log/{}/scores/'.format(args.id)
-    if not os.path.isfile(model_path):
-        print("File not found: {}".format(model_path))
-    else:
-        print("Test model {}".format(model_path))
-        run_test(model_path, scoring_dir=scoring_dir, train_output_dir=train_output_dir, dev_output_dir=dev_output_dir,
-                 test_output_dir=test_output_dir, return_att=True, att_dir=att_output_dir, return_scores=False)
+    print("Test model {}".format(model_path))
+    run_test(model_path, scoring_dir=scoring_dir, train_output_dir=train_output_dir, dev_output_dir=dev_output_dir,
+             test_output_dir=test_output_dir, return_att=True, att_dir=att_output_dir, return_scores=False)
     print("Total time: {}".format(time_since(global_start)))
