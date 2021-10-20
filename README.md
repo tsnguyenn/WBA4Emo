@@ -1,5 +1,17 @@
 # Window-based Attention model for Emotion Understanding
 
+This repo contains the implementation of the window-based model presented in the journal paper ["Attention uncovers task-relevant semantics in emotional narrative understanding"](https://www.sciencedirect.com/science/article/abs/pii/S0950705121004251) (Knowledge-Based Systems - Volume 226, 17 August 2021, 107162)
+
+## Preprocessing 
+1. Download the Stanford Emotional Narratives Dataset (SEND) [here](https://github.com/StanfordSocialNeuroscienceLab/SEND). We will use the linguistic data. 
+2. Convert the dataset into window-based data:
+```
+s
+```
+
+4. 
+5. 
+
 The preprocessed files are included to run the models. The original dataset can be found [here - SEND](https://github.com/StanfordSocialNeuroscienceLab/SEND)
 
 ## Run Window-based with Attention (WBA)
