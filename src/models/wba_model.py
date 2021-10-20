@@ -1,8 +1,6 @@
 '''
-- run the model using precomputed BERT/distillBERT word embeddings
-- copy EventBased_2Layers_ver4_2_addUsingAttentionOption
+not yet support glove
 '''
-
 
 import torch
 from torch import nn
