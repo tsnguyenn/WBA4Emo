@@ -923,7 +923,7 @@ print("Load data")
 train_dataset = StoryDataset('train', args.embeddings, data_dir, event_words_min, event_words_max,
                              train_on_actual_value, scaling, start_score, event_num_words, event_score_type,
                              emb_size=args.emb_dim, has_pre_suf=has_pre_suf)
-dev_dataset = StoryDataset('val', args.embeddings, data_dir, event_words_min, event_words_max,
+dev_dataset = StoryDataset('valid', args.embeddings, data_dir, event_words_min, event_words_max,
                            train_on_actual_value, scaling, start_score, event_num_words, event_score_type,
                            emb_size=args.emb_dim, has_pre_suf=has_pre_suf)
 test_dataset = StoryDataset('test', args.embeddings, data_dir, event_words_min, event_words_max,
