@@ -156,25 +156,19 @@ def is_valid(idir, score_dir):
 
 
 if __name__ == '__main__':
-    # ap = argparse.ArgumentParser()
-    # ap.add_argument('--input', required=True, help='path to features dir')
-    # ap.add_argument('--ratings', required=True, help='path to ratings dir')
-    # ap.add_argument('--output', default='data/preprocessed/window-based_5s/', help='path to output dir')
-    # ap.add_argument('--window', default=5, help='window-time length in seconds', type=int)
-    # ap.add_argument('--key', default='evaluatorWeightedEstimate', help='key of ratings')
-    #
-    # args = ap.parse_args()
-    # input_path = args.input  # e.g., SENDv1_featuresRatings_pw/features/
-    # gt_dir = args.ratings  # e.g., SENDv1_featuresRatings_pw/ratings
-    # output_path = args.output  # e.g., preprocessed_5s/
-    # time_window = args.window  # e.g., 5
-    # rating_key = args.key
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--input', required=True, help='path to features dir')
+    ap.add_argument('--ratings', required=True, help='path to ratings dir')
+    ap.add_argument('--output', default='data/preprocessed/window-based_5s/', help='path to output dir')
+    ap.add_argument('--window', default=5, help='window-time length in seconds', type=int)
+    ap.add_argument('--key', default='evaluatorWeightedEstimate', help='key of ratings')
 
-    time_window = 5
-    input_path = '/Users/sonnguyen/Downloads/SENDv1_featuresRatings_pw/features'
-    gt_dir = '/Users/sonnguyen/Downloads/SENDv1_featuresRatings_pw/ratings'
-    output_path = 'data/preprocessed/window-based_{}s/'.format(time_window)
-    rating_key = 'evaluatorWeightedEstimate'
+    args = ap.parse_args()
+    input_path = args.input  # e.g., SENDv1_featuresRatings_pw/features/
+    gt_dir = args.ratings  # e.g., SENDv1_featuresRatings_pw/ratings
+    output_path = args.output  # e.g., preprocessed_5s/
+    time_window = args.window  # e.g., 5
+    rating_key = args.key
 
     sets = ['test', 'train', 'valid']
     for setname in sets:
