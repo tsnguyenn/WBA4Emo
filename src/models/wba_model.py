@@ -139,15 +139,10 @@ class WBA(nn.Module):
 
         if self.use_attention:
             h1, lens_tmp = pad_packed_sequence(h1, batch_first=self.batch_first)
-            # utils.print_tensor(h1, 'h1')
             att_12 = self.attention(h1).squeeze(2)
-            # utils.print_tensor(att_12, 'att_12')
             # masked softmax
-            att1 = utils.mask_softmax_full(att_12, lens_tmp, self.event_num_words)
-            # utils.print_tensor(att1, 'att1')
-
+            att1 = mask_softmax_full(att_12, lens_tmp, self.event_num_words)
             x_att = torch.sum(att1.unsqueeze(-1) * h1, dim=1)  # [batch * num_sentences - #empty_sentences, (2 if bi else 1) * hidden1_size]
-            # utils.print_tensor(x_att, 'x_att')
 
             # add zero back
             num_zeros = lens_sort.shape[0] - lens_sort_non_zeros.shape[0]
@@ -432,7 +427,7 @@ def train(run_num):
 
             if counter % print_interval == 0:
                 print("[{:10}]. Epoch: {:3}. Iter: {:4}. "
-                      "LR: {:7.6f}. Loss: {:>10.6f}".format(utils.time_since(start), epoch, counter, scheduler.get_lr()[0],
+                      "LR: {:7.6f}. Loss: {:>10.6f}".format(time_since(start), epoch, counter, scheduler.get_lr()[0],
                                                             total_loss/counter))
         # evaluate ccc
         ccc_train, rho_train = evaluate(model, trainloader, train_gt)
@@ -452,7 +447,7 @@ def train(run_num):
             best_output = save_model(model, epoch, best=True, run=run_num)
             best_ccc = ccc_to_compare
         print("{:10}. Epoch {:3}. Total loss: {:7.4f}. LR: {:7.6f}. "
-              "ccc_train: {:4.3f}. ccc_dev: {:4.3f}. ccc_test: {:4.3f}".format(utils.time_since(start), epoch, total_loss, scheduler.get_lr()[0],
+              "ccc_train: {:4.3f}. ccc_dev: {:4.3f}. ccc_test: {:4.3f}".format(time_since(start), epoch, total_loss, scheduler.get_lr()[0],
                                                                                ccc_train, ccc_dev, ccc_test))
         if epoch+1 % model_save_freq == 0:
             _ = save_model(model, epoch, run=run_num)
@@ -519,7 +514,7 @@ def map_prediction_sentID(pred_scores, sent_ids, scores_salient=None):
     if scores_salient is not None:
         salient = {}
     if scaling:
-        pred_scores = utils.rescale_scores(pred_scores)
+        pred_scores = rescale_scores(pred_scores)
     prev_score = start_score
     for i, sid in enumerate(sent_ids):
         score = pred_scores[i]
@@ -772,6 +767,11 @@ def get_ids_from_rating(filename):
         return None, None
 
 
+def mask_softmax_full(matrix, seq_len, max_len):
+    mask = seq_mask(seq_len, max_len)
+    # print("Mask: {}\t{}".format(mask.shape, mask))
+    return mask_softmax(matrix, mask)
+
 global_start = time.time()
 
 '''
@@ -995,7 +995,7 @@ if train_mode:
     print("StdDev")
     print("train: {:.4f}; dev: {:.4f}; test: {:.4f}\n".format(np.std(ccc_trains), np.std(ccc_devs), np.std(ccc_tests)))
     print("Average best epoch: {:.0f}".format(np.mean(best_epoches)))
-    print("Total time: {}".format(utils.time_since(global_start)))
+    print("Total time: {}".format(time_since(global_start)))
 else:
     output_root = os.path.join(output_root, args.name)
     mkdir(output_root)
@@ -1014,20 +1014,6 @@ else:
     mkdir(test_output_dir)
     mkdir(scoring_dir)
 
-    # att_output_dir = None
-    # seq_odir = None
-    # train_output_dir = None
-    # dev_output_dir = None
-    # test_output_dir = None
-    # scoring_dir = os.path.join(output_root, "scores/")
-    # utils.mkdir(att_output_dir)
-    # utils.mkdir(seq_odir)
-    # utils.mkdir(train_output_dir)
-    # utils.mkdir(dev_output_dir)
-    # utils.mkdir(test_output_dir)
-    # utils.mkdir(scoring_dir)
-
-    # model_path = "data/log/{}/models/{}".format(args.id, args.name)
     model_path = os.path.join(model_odir, args.name)
     # model_path = "data/log/{}/best_models/{}".format(args.id, args.name)
     # scoring_dir = 'data/log/{}/scores/'.format(args.id)
@@ -1037,4 +1023,4 @@ else:
         print("Test model {}".format(model_path))
         run_test(model_path, scoring_dir=scoring_dir, train_output_dir=train_output_dir, dev_output_dir=dev_output_dir,
                  test_output_dir=test_output_dir, return_att=True, att_dir=att_output_dir, return_scores=False)
-    print("Total time: {}".format(utils.time_since(global_start)))
+    print("Total time: {}".format(time_since(global_start)))
