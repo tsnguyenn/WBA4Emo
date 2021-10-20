@@ -65,7 +65,7 @@ python3 src/models/wba_model.py --embeddings data/preprocessed/embeddings/window
 --mode test --model data/log/20211020_161126_WB_5_bert+our_bilstm/models/run_0_best_83.pt 
 --output data/log/20211020_161126_WB_5_bert+our_bilstm/results_run0_83
 ```
-Notable arguments for testing are: 
+Notable arguments for testing: 
 * ```--mode```: test
 * ```--model```: path to the model you want to test
 * ```--output```: path to the folder you want to store the output that contains:
