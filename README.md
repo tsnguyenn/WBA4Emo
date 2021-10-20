@@ -12,6 +12,9 @@ python3 src/preprocessing/prepare_windows.py --input SENDv1_featuresRatings_pw/f
 ```
 where ```--input```, ```--ratings``` are the paths to the 'features' and 'ratings' in SEND, respectively. ```--window``` is the window size (in second), and ```--output``` is where you want to save the window-based data. 
 
+Note that files in 'features' are for word level and should contain the following information in the first 3 columns: _time-onset_, _time-offset_, and _word_. 
+
+
 **3. Precompute word embeddings.** 
 ```
 python3 src/preprocessing/precompute_embeddings.py --model bert --gpu 3 
