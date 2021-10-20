@@ -7,11 +7,10 @@
 import torch
 from torch import nn
 import sys
-sys.path.append("/home/son/dgx/Narrative/")
-sys.path.append("/home/son/Narrative/")
+# sys.path.append("/home/son/dgx/Narrative/")
+sys.path.append("/home/son/WBA4Emo")
 
-from src.utilities import scoring
-from src.archived import config
+from src.utils import scoring
 import os
 import json
 import re
@@ -32,12 +31,13 @@ import numpy as np
 # np.random.seed(seed)
 import pickle
 from tqdm import tqdm
+import math
 
 
-class LSTM(nn.Module):
+class WBA(nn.Module):
     def __init__(self, input_dim, hid1_dim, hid1_bi, hid1_nlayers, max_num_words,
                  hid2_dim, hid2_bi, hid2_nlayers, batch_first, device, dropout_p, use_attention):
-        super(LSTM, self).__init__()
+        super(WBA, self).__init__()
         self.lstm1_factor = (2 if hid1_bi else 1) * hid1_nlayers
         self.hid1_dim = hid1_dim
         self.lstm2_factor = (2 if hid2_bi else 1) * hid2_nlayers
@@ -185,7 +185,7 @@ class LSTM(nn.Module):
 
 
 class StoryDataset(Dataset):
-    def __init__(self, set_name, splits, we_dir, data_dir, min_len, max_len,
+    def __init__(self, set_name, embedding_dir, data_dir, min_len, max_len,
                  actual, scaling, start_score, num_words, event_score_type, emb_size=768, has_pre_suf=True):
         print("Loading data for ", set_name)
         self.actual = actual
@@ -207,8 +207,8 @@ class StoryDataset(Dataset):
         self.event_lens = {}
         self.vid_sent_mapping = {}  # {video_id: [sentence_ids]}
         self.vid_sent_content = {}  # {video_id: {event_id: [tokens]}
-        self.load_data(data_dir, splits[set_name],
-                       os.path.join(we_dir, '{}.pkl'.format(set_name)), os.path.join(we_dir, '{}.json'.format(set_name)),
+        self.load_data(os.path.join(data_dir, set_name),
+                       os.path.join(embedding_dir, '{}.pkl'.format(set_name)), os.path.join(embedding_dir, '{}.json'.format(set_name)),
                        has_pre_suf=has_pre_suf)
 
     def __len__(self):
@@ -220,11 +220,13 @@ class StoryDataset(Dataset):
         # return self.embds[name], self.valence_scores[name], self.event_ids[name], name, self.salient_scores[name], self.other_info[name]
         return self.embds[name], self.valence_scores[name], name, self.event_lens[name]
 
-    def load_data(self, data_dir, namelist, embedding_file, info_file, has_pre_suf=True):
+    def load_data(self, data_dir, embedding_file, info_file, has_pre_suf=True):
         word_embeddings = pickle.load(open(embedding_file, 'rb'))
         tokens_info = json.load(open(info_file, 'r'))
 
-        for name in tqdm(namelist):
+        for name in tqdm(os.listdir(data_dir)):
+            if name.startswith('.'):
+                continue
             event_embds = word_embeddings[name]
             event_tokens = tokens_info[name]
 
@@ -241,7 +243,7 @@ class StoryDataset(Dataset):
             prev_score = self.start_score
             other_info = []
             if self.scaling:
-                prev_score = utils.std_single_score(start_score)
+                prev_score = std_single_score(start_score)
             ifile = os.path.join(data_dir, "{}.json".format(name))
             events = json.load(open(ifile, 'r', encoding='utf8'))
 
@@ -255,7 +257,7 @@ class StoryDataset(Dataset):
                 events_embeddings.append(tmp)      # event embeddings = average words' embeddings
                 # score
                 if self.scaling:
-                    event_scores = utils.scale_scores(event['scores'])
+                    event_scores = scale_scores(event['scores'])
                 else:
                     event_scores = event['scores']
 
@@ -310,6 +312,11 @@ class StoryDataset(Dataset):
                 for _ in range(tmp):
                     valid_embds = torch.cat((valid_embds, torch.zeros(1, self.emb_size)), dim=0)
         return valid_embds, actual_len, valid_words
+
+
+def mkdir(directory):
+    if not os.path.isdir(directory):
+        os.makedirs(directory)
 
 
 def print_tensor(t_label, t_content, details=False):
@@ -371,9 +378,9 @@ def my_padding(batch):
 
 
 def init_model():
-    return LSTM(input_dim=args.emb_dim, hid1_dim=hid1_dim, hid1_bi=hid1_bi, hid1_nlayers=hid1_nlayers, max_num_words=event_num_words,
-                 hid2_dim=hid2_dim, hid2_bi=hid2_bi, hid2_nlayers=hid2_nlayers, batch_first=batch_first,
-                device=device, dropout_p=dropout_p, use_attention=use_attention)
+    return WBA(input_dim=args.emb_dim, hid1_dim=hid1_dim, hid1_bi=hid1_bi, hid1_nlayers=hid1_nlayers, max_num_words=event_num_words,
+               hid2_dim=hid2_dim, hid2_bi=hid2_bi, hid2_nlayers=hid2_nlayers, batch_first=batch_first,
+               device=device, dropout_p=dropout_p, use_attention=use_attention)
 
 def train(run_num):
     model = init_model()
@@ -524,6 +531,7 @@ def map_prediction_sentID(pred_scores, sent_ids, scores_salient=None):
             salient[sid] = scores_salient[i]
     return scores, salient
 
+
 def get_valid_sentence_index(current_index, scores, sent_list):
     next_index = current_index + 1
     if next_index >= len(sent_list):
@@ -531,55 +539,6 @@ def get_valid_sentence_index(current_index, scores, sent_list):
     while next_index < len(sent_list) and sent_list[next_index] not in scores:
         next_index += 1
     return next_index
-
-
-# def construct_pred_sequences(all_scores, vid_sentences_mapping, sent_info, gt_sequences):
-#     '''
-#     Construct sequences from the predicted scores and groundtruth info
-#     :param scores: {video: [list of scores]}
-#     :param vid_sentences_mapping:
-#     :param sent_info:
-#     :return:
-#     '''
-#     pred_sequences = {}
-#
-#     for vid, sent_list in vid_sentences_mapping.items():
-#         # print("Generating pred seq for {}\t{}".format(vid, len(sent_list)))
-#         seq = []
-#         gt_len = len(gt_sequences[vid])
-#         scores = map_prediction_sentID(all_scores[vid], sent_list)
-#         current_sent_index = get_valid_sentence_index(-1, scores, sent_list)
-#         current_sent = sent_list[current_sent_index]
-#         current_info = sent_info[current_sent]  # [stime, etime, #scores]
-#         default_score = 50
-#
-#         while len(seq) < gt_len:
-#             current_time = len(seq) * 0.5
-#             # print("current_time: {}\t{}".format(current_time, vid))
-#             if current_info[0] <= current_time <= current_info[1]:
-#                 # if current_sent == "ID165_vid4_4":
-#                 #     print(current_info[0], current_time, current_info[1])
-#                 if current_sent in scores:
-#                     default_score = scores[current_sent]
-#                     # print("0")
-#                 seq.append(default_score)
-#                 # print("1")
-#                 continue
-#             if current_time < current_info[0]:
-#                 seq.append(default_score)
-#                 # print("2")
-#                 continue
-#             if current_time > current_info[1]:
-#                 current_sent_index = get_valid_sentence_index(current_sent_index, scores, sent_list)
-#                 if current_sent_index >= len(sent_list):
-#                     seq.append(default_score)
-#                     # print("3")
-#                 else:
-#                     current_sent = sent_list[current_sent_index]
-#                     current_info = sent_info[current_sent]
-#                     # print("4: {}\t{}\t{}".format(current_sent_index, current_sent, len(sent_list)))
-#         pred_sequences[vid] = seq
-#     return pred_sequences
 
 
 def construct_pred_sequences(all_scores, vid_sentences_mapping, sent_info, gt_sequences, scores_salient=None):
@@ -591,7 +550,6 @@ def construct_pred_sequences(all_scores, vid_sentences_mapping, sent_info, gt_se
     :return:
     '''
     pred_sequences = {}
-
     for vid, sent_list in vid_sentences_mapping.items():
         # print("Generating pred seq for {}\t{}".format(vid, len(sent_list)))
         current_sent_info = sent_info[vid]
@@ -661,27 +619,12 @@ def write_att_details(vid_sents_mapping, sent_content_mapping, event_details, in
         with open(ofile, 'w', encoding='utf-8') as writer:
             writer.write("@EventID\tStartTime\tEndTime\tAllTokens\tGT\tStdDev\tValidTokens\tAttentions\tPred_Score\n")
             for i, sent in enumerate(sents):
-                # print('tmp details: {}\n{}'.format(sent, tmp_details.keys()))
-                # print('tmp content: {}\n{}'.format(sent, tmp_content.keys()))
-                # print("att: \n{}".format(attentions))
                 writer.write("{}\t{}\t{}\t{}\n".format(tmp_details[sent], tmp_content[sent], get_att_str(att[i]), tmp_preds[i].cpu().item()))
 
 
 def run_test(model_path, scoring_dir=None, train_output_dir=None, dev_output_dir=None,
              test_output_dir=None, att_dir=None, return_scores=False, return_att=False):
     model = load_model(model_path)
-
-    # a1 = torch.zeros(model.att1.weight.shape)
-    # b1 = torch.zeros(model.att1.bias.shape)
-    # print("model.att1: original")
-    # print(model.att1.weight)
-    # print(model.att1.bias)
-    #
-    # print("model.att1: changed to zeros")
-    # model.att1.weight = nn.Parameter(a1)
-    # model.att1.bias = nn.Parameter(b1)
-    # print(model.att1.weight)
-    # print(model.att1.bias)
 
     tmp = os.path.basename(model_path)[:-3]
 
@@ -699,33 +642,6 @@ def run_test(model_path, scoring_dir=None, train_output_dir=None, dev_output_dir
         print("Train. rho: {}. ccc: {}. ".format(rhotrain, ccctrain))
         print("Dev. rho: {}. ccc: {}. ".format(rhodev, cccdev))
         print("Test. rho: {}. ccc: {}. ".format(rhotest, ccctest))
-
-    # print("Evaluating on train: ")
-    # ccc, rho = evaluate(model, trainloader, train_gt, output_dir=train_output_dir, return_att=False,
-    #                     att_output_dir=train_att_dir, source="train_{}".format(tmp))
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
-    #
-    # print("Evaluating on dev: ")
-    # ccc, rho = evaluate(model, devloader, dev_gt, output_dir=dev_output_dir, return_att=False,
-    #                     att_output_dir=dev_att_dir, source="dev_{}".format(tmp))
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
-    #
-    # print("Evaluating on test: ")
-    # ccc, rho = evaluate(model, testloader, test_gt, output_dir=test_output_dir, return_att=False,
-    #                     att_output_dir=test_att_dir, source="test_{}".format(tmp))
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
-
-    # print("Evaluating on train: ")
-    # ccc, rho = evaluate(model, trainloader, train_gt)
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
-    #
-    # print("Evaluating on dev: ")
-    # ccc, rho = evaluate(model, devloader, dev_gt)
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
-    #
-    # print("Evaluating on test: ")
-    # ccc, rho = evaluate(model, testloader, test_gt)
-    # print("rho: {}. ccc: {}. ".format(rho, ccc))
 
 
 def evaluate(model, dataloader, gt_sequences, scoring_dir=None, output_dir=None, return_att=False, att_output_dir=None, source=None):
@@ -768,25 +684,6 @@ def evaluate(model, dataloader, gt_sequences, scoring_dir=None, output_dir=None,
             ofile = os.path.join(output_dir, "{}.txt".format(vid))
             write_seq(seq, ofile)
     if return_att and att_output_dir:
-        # write attention details
-        '''
-        self.ids = []   # stories ids
-        self.embds = {} # {filename: Tensor(num_events, num_words, 300)}
-        self.event_ids = {}    # {video_id: [window_ids]}
-        self.valence_scores = {}
-        self.salient_scores = {}
-        self.min_len = min_len
-        self.max_len = max_len
-        self.event_score_type = event_score_type
-        self.other_info = {}    # e.g., len of the events (#tokens, position of the event in the story)
-        self.event_info = {}  # {video_id: {window_id: (start_time, end_time, #values)}}
-        self.event_details = {}  # {video_id: {event_id: "{start_time}\t{end_time}\t{tokens}\t{real_value_groundtruth}\t{groundtruth}"}}
-        self.event_lens = {}
-        self.vid_sent_mapping = {}  # {video_id: [sentence_ids]}
-        self.vid_sent_content = {}  # {video_id: {event_id: [tokens]}
-        '''
-        # write_att_details(dataset.sent_gt, dataset.vid_sent_mapping, dataset.sent_content, dataset.sent_events, init_predictions,
-        #                   attentions, att_output_dir)
         write_att_details(dataset.vid_sent_mapping, dataset.vid_sent_content, dataset.event_details, init_predictions, attentions, att_output_dir)
 
     return ccc, rho
@@ -797,47 +694,31 @@ def load_groundtruth_file(ifile, rating_column='evaluatorWeightedEstimate'):
     return list(data[rating_column])
 
 
-def load_groundtruth(gt_dir, file_list):
+def get_ids(filename):
+    pattern = "ID(\d*)_vid(\d*)"
+    result = re.search(pattern, filename)
+    if result:
+        return result.group(1), result.group(2)
+    else:
+        return None, None
+
+
+def load_groundtruth(gt_dir):
     gts = {}
-    for fname in file_list:
+    for fname in os.listdir(gt_dir):
         if fname.startswith("."):
             continue
-        vid, sent = utils.get_ids(fname)
+        vid, sent = get_ids_from_rating(fname)
         if vid is None:
             continue
-        gt = load_groundtruth_file(os.path.join(gt_dir, "results_{}_{}.csv".format(vid, sent)))
-        gts[fname] = gt
+        gt = load_groundtruth_file(os.path.join(gt_dir, fname))
+        gts["ID{}_vid{}".format(vid, sent)] = gt
     return gts
 
 
 def get_setting(model_setting):
-    setting = "model: {};" \
-              "sgd: {}; " \
-              "lr_initial: {};" \
-              "lr_step: {};" \
-              "lr_gamma: {};" \
-              "num_epoches: {}; " \
-              "batch_size: {}; " \
-              "dropout_p: {}; " \
-              "n_batches: {}; " \
-              "earlystop_based_on: {}; " \
-              "train_on_actual_value: {};" \
-              "data_dir: {};" \
-              "hid1_dim: {};" \
-              "hid1_bi:{};" \
-              "hid1_nlayers:{};" \
-              "hid2_dim: {};" \
-              "hid2_bi:{};" \
-              "hid2_nlayers:{};" \
-              "event_score_type:{};" \
-              "event_num_words:{};" \
-              "event_word_min:{};" \
-              "event_word_max:{};" \
-              "optimizer_opt:{};" \
-              "args:{}".format(model_setting, sgd, lr, lr_step, lr_gamma, n_epoch, batch_size, dropout_p, n_batch, earlyStop,
-                                           train_on_actual_value, data_dir,
-                                        hid1_dim, hid1_bi, hid1_nlayers, hid2_dim, hid2_bi, hid2_nlayers, event_score_type,
-                                         event_num_words, event_words_min, event_words_max, optimizer_opt, args.__dict__)
+    setting = "model: {}\n\n" \
+              "args:{}".format(model_setting, args.__dict__)
     return setting
 
 
@@ -848,6 +729,49 @@ def get_epoch_number(input_name):
         return int(res.group(1))
     return -1
 
+
+def time_since(start):
+    s = time.time() - start
+    h = math.floor(s / 3600)
+    s = s - h * 3600
+    m = math.floor(s / 60)
+    s = s - m * 60
+    if h > 0:
+        return "{}h:{}m:{:.0f}s".format(h, m, s)
+    return "{}m:{:.0f}s".format(m, s)
+
+
+def print_time(start):
+    print("Time: {}".format(time_since(start)))
+
+
+def std_single_score(score):
+    return (score - 50)/50
+
+
+def scale_scores(scores):
+    tmp = [std_single_score(i) for i in scores]
+    return tmp
+
+
+def rescale_single_score(score):
+    return score * 50 + 50
+
+
+def rescale_scores(scores):
+    tmp = [rescale_single_score(i) for i in scores]
+    return tmp
+
+
+def get_ids_from_rating(filename):
+    pattern = "results_(\d*)_(\d*)"
+    result = re.search(pattern, filename)
+    if result:
+        return result.group(1), result.group(2)
+    else:
+        return None, None
+
+
 global_start = time.time()
 
 '''
@@ -855,11 +779,10 @@ Arguments
 '''
 ap = argparse.ArgumentParser()
 ap.add_argument("-m", "--mode", help="{train, test}", choices=['train', 'test', 'count_paras'], default='test')
-ap.add_argument("--id", help="Program id", default='')
 ap.add_argument("--name", help="model name", default='')
 ap.add_argument("--gpu", help="gpu", default=0, choices=[0, 1, 2, 3], type=int)
 ap.add_argument('--value', help="actual: predict actual value; diff: predict differences", choices=['actual', 'diff'], default='actual')
-ap.add_argument("--bi", help="{no: LSTM; yes: BiLSTM}", default='no', choices=["no", "yes"])
+ap.add_argument("--bi", help="{no: LSTM; yes: BiLSTM}", default='yes', choices=["no", "yes"])
 ap.add_argument("--event_score", help="type of event score to use {mean, last}", default="mean", choices=["mean", "last"])
 ap.add_argument("--scaling", help="whether to do scaling", default='yes', choices=['yes', 'no'])
 ap.add_argument("--batch", help="batch size", default=117, type=int)
@@ -871,8 +794,8 @@ ap.add_argument("--lr", help="learning rate", default=0.01, type=float)
 ap.add_argument("--dropout", help="dropout", default=0.0, type=float)
 ap.add_argument('--optimizer', help="Optimizer: SGD or Adam", choices=['sgd', 'adam'])
 ap.add_argument("--event_min", help="Event min length", default=2, type=int)
-ap.add_argument("--event_max", help="Event max length", default=20, type=int)
-ap.add_argument("--event_len", help="number of words in an event (padding)", default=20, type=int)
+ap.add_argument("--event_max", help="Event max length", default=25, type=int)
+ap.add_argument("--event_len", help="number of words in an event (padding)", default=25, type=int)
 ap.add_argument('--embeddings', default='data/with_pretrained_embds/bert/words_window-based_5_seconds')
 ap.add_argument('--data', default='data/lowercased/EWE_allen_origin_tokens_inclStopwords_withScores/')
 ap.add_argument('--splits', default='data/_TrainSetAssignments/splits.json')
@@ -880,6 +803,8 @@ ap.add_argument('--suffix', help='suffix to logdir', default='')
 ap.add_argument("--attention", help="whether to use attention (If no, the last hidden will be used)", default='yes', choices=['yes', 'no'])
 ap.add_argument("--emb_dim", help="Word embedding dim", default=768, type=int)
 ap.add_argument("--has_pre_suf", help="whether to trim prefix and suffix. No for GPT2", default='yes', choices=['yes', 'no'])
+ap.add_argument('--ratings', required=True, help='path to ratings dir', default='data/ratings/')
+ap.add_argument("--logdir", help="folder created when training the model (to use in test)")
 
 args = ap.parse_args()
 
@@ -894,7 +819,6 @@ sgd = False
 lr = args.lr
 lr_step = 50
 lr_gamma = 0.9
-
 num_runs = args.runs
 has_pre_suf = True
 if args.has_pre_suf == 'no':
@@ -959,29 +883,19 @@ Directories
 '''
 prog_id = time.strftime("%Y%m%d_%H%M%S", time.localtime(global_start))  # program id
 if args.mode == 'test':
-    prog_id = args.id
-elif args.suffix != '':
-    prog_id += "_{}".format(args.suffix)
-print("Program ID: {}".format(prog_id))
-log_dir = "data/log/{}/".format(prog_id)
+    log_dir = args.logdir
+else:
+    if args.suffix != '':
+        prog_id += "_{}".format(args.suffix)
+    log_dir = "data/log/{}/".format(prog_id)
+print("log_dir: {}".format(log_dir))
+
 
 model_odir = os.path.join(log_dir, "models/")
 scoring_dir = os.path.join(log_dir, 'scores')
 output_root = os.path.join(log_dir, 'test_results/')
 
-
-
 score_writer = None
-
-# attention_output = os.path.join(log_dir, "attention_details/")
-# train_att_dir = os.path.join(attention_output, "train/")
-# dev_att_dir = os.path.join(attention_output, "dev/")
-# test_att_dir = os.path.join(attention_output, "test/")
-# utils.mkdir(attention_output)
-# utils.mkdir(train_att_dir)
-# utils.mkdir(dev_att_dir)
-# utils.mkdir(test_att_dir)
-
 
 '''
 Initialization
@@ -1004,30 +918,28 @@ start = time.time()
 # data_dir = "data/data_sorted_events_orgSents/"
 # data_dir = 'data/data_sentences_time_diff_0.1/'
 data_dir = args.data
-split_file = args.splits
-print("Load splits")
-splits = json.load(open(split_file, 'r'))
+
 print("Load data")
-train_dataset = StoryDataset('train', splits, args.embeddings, data_dir, event_words_min, event_words_max,
+train_dataset = StoryDataset('train', args.embeddings, data_dir, event_words_min, event_words_max,
                              train_on_actual_value, scaling, start_score, event_num_words, event_score_type,
                              emb_size=args.emb_dim, has_pre_suf=has_pre_suf)
-dev_dataset = StoryDataset('val', splits, args.embeddings, data_dir, event_words_min, event_words_max,
+dev_dataset = StoryDataset('val', args.embeddings, data_dir, event_words_min, event_words_max,
                            train_on_actual_value, scaling, start_score, event_num_words, event_score_type,
                            emb_size=args.emb_dim, has_pre_suf=has_pre_suf)
-test_dataset = StoryDataset('test', splits, args.embeddings, data_dir, event_words_min, event_words_max,
+test_dataset = StoryDataset('test', args.embeddings, data_dir, event_words_min, event_words_max,
                             train_on_actual_value, scaling, start_score, event_num_words, event_score_type,
                             emb_size=args.emb_dim, has_pre_suf=has_pre_suf)
 
 trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=my_padding)
 devloader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=False, collate_fn=my_padding)
 testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=my_padding)
-utils.print_time(start)
 
 # load groundtruth
-gt_dir = "data/observers_EWE/"
-train_gt = load_groundtruth(gt_dir, splits['train'])
-dev_gt = load_groundtruth(gt_dir, splits['val'])
-test_gt = load_groundtruth(gt_dir, splits['test'])
+gt_dir = args.ratings  # "data/ratings
+rating_fname='observer_EWE'
+train_gt = load_groundtruth(os.path.join(gt_dir, 'train', rating_fname))
+dev_gt = load_groundtruth(os.path.join(gt_dir, 'valid', rating_fname))
+test_gt = load_groundtruth(os.path.join(gt_dir, 'test', rating_fname))
 
 ccc_trains = []
 ccc_devs = []
@@ -1042,9 +954,9 @@ if args.mode == 'count_paras':
     print("#trainable_params: {}".format(total_params_trainable))
     sys.exit(0)
 if train_mode:
-    utils.mkdir(log_dir)
-    utils.mkdir(model_odir)
-    utils.mkdir(scoring_dir)
+    mkdir(log_dir)
+    mkdir(model_odir)
+    mkdir(scoring_dir)
     score_writer = open(os.path.join(log_dir, "train_scores.txt"), 'w')
     # score_writer.write("Epoch\tccc_train\tccc_dev\tccc_test\t\tEpoch\trho_train\trho_dev\trho_test\n")
 
@@ -1085,9 +997,8 @@ if train_mode:
     print("Average best epoch: {:.0f}".format(np.mean(best_epoches)))
     print("Total time: {}".format(utils.time_since(global_start)))
 else:
-    utils.mkdir(output_root)
     output_root = os.path.join(output_root, args.name)
-    utils.mkdir(output_root)
+    mkdir(output_root)
 
     att_output_dir = os.path.join(output_root, "attention_output/")
     seq_odir = os.path.join(output_root, "pred_seqs/")
@@ -1096,12 +1007,12 @@ else:
     test_output_dir = os.path.join(seq_odir, "test/")
     scoring_dir = os.path.join(output_root, "scores/")
 
-    utils.mkdir(att_output_dir)
-    utils.mkdir(seq_odir)
-    utils.mkdir(train_output_dir)
-    utils.mkdir(dev_output_dir)
-    utils.mkdir(test_output_dir)
-    utils.mkdir(scoring_dir)
+    mkdir(att_output_dir)
+    mkdir(seq_odir)
+    mkdir(train_output_dir)
+    mkdir(dev_output_dir)
+    mkdir(test_output_dir)
+    mkdir(scoring_dir)
 
     # att_output_dir = None
     # seq_odir = None
