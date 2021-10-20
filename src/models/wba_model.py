@@ -936,6 +936,7 @@ if args.mode == 'train':
     print("log_dir: {}".format(log_dir))
     model_odir = os.path.join(log_dir, "models/")
     scoring_dir = os.path.join(log_dir, 'scores')
+    setting_file = os.path.join(log_dir, "setting.txt")
 else:
     output_root = args.output
 
@@ -981,7 +982,6 @@ test_gt = load_groundtruth(os.path.join(gt_dir, 'test', rating_fname))
 ccc_trains = []
 ccc_devs = []
 ccc_tests = []
-setting_file = os.path.join(log_dir, "setting.txt")
 
 if train_mode:
     mkdir(model_odir)
