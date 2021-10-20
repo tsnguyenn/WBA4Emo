@@ -9,7 +9,7 @@ from torch import nn
 import sys
 # sys.path.append("/home/son/dgx/Narrative/")
 sys.path.append("/home/son/WBA4Emo")
-
+import torch.nn.functional as F
 from src.utils import scoring
 import os
 import json
@@ -765,6 +765,52 @@ def get_ids_from_rating(filename):
         return result.group(1), result.group(2)
     else:
         return None, None
+
+
+def seq_mask(seq_len, max_len):
+    """
+    # Source: https://www.kaggle.com/robertke94/pytorch-bi-lstm-attention
+    Create sequence mask.
+
+    Parameters
+    ----------
+    seq_len: torch.long, shape [batch_size],
+        Lengths of sequences in a batch.
+    max_len: int
+        The maximum sequence length in a batch.
+
+    Returns
+    -------
+    mask: torch.long, shape [batch_size, max_len]
+        Mask tensor for sequence.
+    """
+    idx = torch.arange(max_len).to(seq_len).repeat(seq_len.size(0), 1)
+    mask = torch.gt(seq_len.unsqueeze(1), idx).to(seq_len)
+    return mask
+
+
+def mask_softmax(matrix, mask=None):
+    """Perform softmax on length dimension with masking.
+    # Source: https://www.kaggle.com/robertke94/pytorch-bi-lstm-attention
+    Parameters
+    ----------
+    matrix: torch.float, shape [batch_size, .., max_len]
+    mask: torch.long, shape [batch_size, max_len]
+        Mask tensor for sequence.
+
+    Returns
+    -------
+    output: torch.float, shape [batch_size, .., max_len]
+        Normalized output in length dimension.
+    """
+    if mask is None:
+        result = F.softmax(matrix, dim=-1)
+    else:
+        mask_norm = ((1 - mask) * NEG_INF).to(matrix)
+        for i in range(matrix.dim() - mask_norm.dim()):
+            mask_norm = mask_norm.unsqueeze(1)
+        result = F.softmax(matrix + mask_norm, dim=-1)
+    return result
 
 
 def mask_softmax_full(matrix, seq_len, max_len):
