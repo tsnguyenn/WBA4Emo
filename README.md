@@ -6,11 +6,22 @@ This repo contains the implementation of the window-based model presented in the
 1. Download the Stanford Emotional Narratives Dataset (SEND) [here](https://github.com/StanfordSocialNeuroscienceLab/SEND). We will use the linguistic data. 
 2. Convert the dataset into window-based data:
 ```
-s
+python3 src/preprocessing/prepare_windows.py --input SENDv1_featuresRatings_pw/features 
+--ratings SENDv1_featuresRatings_pw/ratings --window 5 --output data/preprocessed/window-based_5s/ 
 ```
+where ```--input```, ```--ratings``` are the paths to the 'features' and 'ratings' in SEND, respectively. ```--window``` is the window size (in second), and ```--output``` is where you want to save the window-based data. 
 
-4. 
+3. Precompute word embeddings. 
+* GloVe: unzip the filtered GloVe embeddings file ([data/preprocessed/embeddings/glove.840B.300d.word2vec.filtered.zip](https://github.com/jsonnguyen/WBA4Emo/blob/master/data/preprocessed/embeddings/glove.840B.300d.word2vec.filtered.zip))
+* Other pre-trained models: 
+```
+python3 src/preprocessing/precompute_embeddings.py --model bert --gpu 3 
+--input data/preprocessed/window-based_5s --output data/preprocessed/embeddings/
+```
+where ```--model``` is the pretrained model you want to use. Implemented models: 'roberta', 'gpt2', 'electra', 'bert', 'distill', 'transformerxl'. ```--input``` is the window-based data preprocessed in (2), ```--output``` where you want to store the pre-computed embeddings to be used later (the actual dir will be automatically created). 
+
 5. 
+6. 
 
 The preprocessed files are included to run the models. The original dataset can be found [here - SEND](https://github.com/StanfordSocialNeuroscienceLab/SEND)
 
