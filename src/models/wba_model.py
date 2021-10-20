@@ -7,15 +7,12 @@
 import torch
 from torch import nn
 import sys
-# sys.path.append("/home/son/dgx/Narrative/")
 sys.path.append("/home/son/WBA4Emo")
 import torch.nn.functional as F
 from src.utils import scoring
 import os
 import json
 import re
-from src import utils
-from gensim.models import KeyedVectors
 from torch.utils.data import DataLoader, Dataset
 import torch.optim as optim
 import pandas
@@ -25,10 +22,6 @@ import argparse
 from torch.optim.lr_scheduler import StepLR
 from tensorboardX import SummaryWriter
 import numpy as np
-# seed = 1
-# torch.manual_seed(seed)
-# torch.cuda.manual_seed(seed)
-# np.random.seed(seed)
 import pickle
 from tqdm import tqdm
 import math
@@ -52,10 +45,6 @@ class WBA(nn.Module):
 
         # 1st-layer LSTM: input: word embedding; output: sentence representation
         self.lstm1 = nn.LSTM(input_dim, hid1_dim, bidirectional=hid1_bi, num_layers=hid1_nlayers, batch_first=batch_first)
-        # self.att1 = nn.Linear((2 if hid1_bi else 1) * hid1_dim * max_num_words, max_num_words)  # take the last layer of the lstm only
-
-        # self.att_11 = nn.Linear((2 if hid1_bi else 1) * hid1_dim * max_num_words, max_num_words)
-        # self.att_12 = nn.Linear(max_num_words, max_num_words)
         tmp_dim_1 = self.lstm1_factor * hid1_dim
         self.attention = nn.Sequential(nn.Linear(tmp_dim_1, tmp_dim_1),
                                        nn.Tanh(),
@@ -66,12 +55,6 @@ class WBA(nn.Module):
 
         # 2nd-layer LSTM: input: sentence representation, output: prediction
         self.lstm2 = nn.LSTM(self.lstm1_factor * hid1_dim, hid2_dim, bidirectional=hid2_bi, num_layers=hid2_nlayers, batch_first=batch_first)
-
-        # Regression
-        # self.reg = nn.Linear(self.lstm2_factor * hid2_dim, 1)
-        # self.reg = nn.Sequential(nn.Linear(self.lstm2_factor * hid2_dim, 32),
-        #                          nn.ReLU(),
-        #                          nn.Linear(32, 1))
 
         self.valence = nn.Sequential(nn.Linear(self.lstm2_factor * hid2_dim, 128),
                                      nn.ReLU(),
@@ -1031,7 +1014,6 @@ else:
     if not os.path.isfile(model_path):
         print("Model not found ", model_path)
         sys.exit(0)
-
     mkdir(output_root)
     att_output_dir = os.path.join(output_root, "attention_output/")
     seq_odir = os.path.join(output_root, "pred_seqs/")
