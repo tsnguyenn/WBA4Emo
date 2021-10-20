@@ -707,7 +707,7 @@ def load_groundtruth(gt_dir):
         if vid is None:
             continue
         gt = load_groundtruth_file(os.path.join(gt_dir, fname))
-        gts["ID{}_vid{}".format(vid, sent)] = gt
+        gts["ID{}_vid{}.json".format(vid, sent)] = gt
     return gts
 
 
@@ -1016,7 +1016,9 @@ if train_mode:
     runs_writer = open(os.path.join(log_dir, "runs_scores.txt"), 'w')
     runs_writer.write("@Run\tBestEpoch\tTrain(Best)\tDev\tTest\n")
     for run in range(num_runs):
-        print("Run {}".format(run))
+        print("=================================")
+        print("= Run #{}".format(run))
+        print("=================================")
         score_writer.write("\n\n--------------------\nRUN {}\n\n".format(run))
         score_writer.write("Epoch\tccc_train\tccc_dev\tccc_test\t\tEpoch\trho_train\trho_dev\trho_test\n")
         last_output, best_output = train(run)
