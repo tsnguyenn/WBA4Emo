@@ -935,10 +935,10 @@ if args.mode == 'train':
     log_dir = "data/log/{}/".format(prog_id)
     print("log_dir: {}".format(log_dir))
     model_odir = os.path.join(log_dir, "models/")
+    scoring_dir = os.path.join(log_dir, 'scores')
 else:
-    log_dir = args.output
-scoring_dir = os.path.join(log_dir, 'scores')
-output_root = os.path.join(log_dir, 'test_results/')
+    output_root = args.output
+
 score_writer = None
 
 '''
@@ -1050,4 +1050,7 @@ else:
     print("Test model {}".format(model_path))
     run_test(model_path, scoring_dir=scoring_dir, train_output_dir=train_output_dir, dev_output_dir=dev_output_dir,
              test_output_dir=test_output_dir, return_att=True, att_dir=att_output_dir, return_scores=False)
+    print("Output is at", output_root)
     print("Total time: {}".format(time_since(global_start)))
+
+
