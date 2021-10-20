@@ -18,9 +18,12 @@ where ```--input```, ```--ratings``` are the paths to the 'features' and 'rating
 python3 src/preprocessing/precompute_embeddings.py --model bert --gpu 3 
 --input data/preprocessed/window-based_5s --output data/preprocessed/embeddings/
 ```
-where ```--model``` is the pretrained model you want to use. Implemented models: 'roberta', 'gpt2', 'electra', 'bert', 'distill', 'transformerxl'. ```--input``` is the window-based data preprocessed in (2), ```--output``` where you want to store the pre-computed embeddings to be used later (the actual dir will be automatically created). 
+where 
+* ```--model``` is the pretrained model you want to use. Available models: 'roberta', 'gpt2', 'electra', 'bert', 'distill', 'transformerxl'. 
+* ```--input``` is the window-based data preprocessed in (2), 
+* ```--output``` where you want to store the pre-computed embeddings to be used later (the actual dir will be automatically created). 
 
-5. 
+4. 
 6. 
 
 The preprocessed files are included to run the models. The original dataset can be found [here - SEND](https://github.com/StanfordSocialNeuroscienceLab/SEND)
