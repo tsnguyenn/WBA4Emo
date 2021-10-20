@@ -2,6 +2,19 @@
 
 This repo contains the implementation of the window-based model presented in the journal paper "[Attention uncovers task-relevant semantics in emotional narrative understanding](https://www.sciencedirect.com/science/article/abs/pii/S0950705121004251)" \[[pdf](https://www.dropbox.com/s/mhmbaq1meeb2lva/Narrative-WBA-KB21.pdf?dl=0)\] (Knowledge-Based Systems - Volume 226, 17 August 2021, 107162)
 
+**Citation**: If you want to refer our work or use our code, please cite the paper:
+```
+@article{nguyen2021attention,
+  title={Attention uncovers task-relevant semantics in emotional narrative understanding},
+  author={Nguyen, Thanh-Son and Wu, Zhengxuan and Ong, Desmond C},
+  journal={Knowledge-Based Systems},
+  volume={226},
+  pages={107162},
+  year={2021},
+  publisher={Elsevier}
+}
+```
+
 The proposed Window-based Attention (WBA) model includes a hierarchical (two-level) LSTM with attention mechanism to predict real-valued emotion valence in time-series: 
 ![WBA Model for Emotion Valence Prediction](https://github.com/tsnguyen-pk/WBA4Emo/blob/master/data/img/WBA_model.jpg)
 
@@ -72,4 +85,5 @@ Notable arguments for testing:
     * attention_output: word-level attention scores  
     * pred_seqs: predicted sequences
     * scores: detailed scores for each input file.
+
 
