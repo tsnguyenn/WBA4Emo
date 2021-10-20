@@ -244,7 +244,7 @@ class StoryDataset(Dataset):
             other_info = []
             if self.scaling:
                 prev_score = std_single_score(start_score)
-            ifile = os.path.join(data_dir, "{}.json".format(name))
+            ifile = os.path.join(data_dir, name)
             events = json.load(open(ifile, 'r', encoding='utf8'))
 
             for event in events:
